@@ -1,60 +1,15 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{
- font-family:sans-serif;
- padding:10px;
- margin:0;
-}
-
-h2{
- text-align:center;
-}
-
-input{
- width:100%;
- padding:12px;
- margin-bottom:10px;
- font-size:16px;
- box-sizing:border-box;
-}
-
-button{
- width:100%;
- padding:15px;
- margin-bottom:10px;
- font-size:16px;
- border:none;
- border-radius:8px;
-}
-
-.add{
- background:#4CAF50;
- color:white;
-}
-
-.csv{
- background:#2196F3;
- color:white;
-}
-
-.del{
- background:#f44336;
- color:white;
- width:auto;
- padding:5px 10px;
- font-size:12px;
- margin-left:10px;
-}
-
-.card{
- background:#f5f5f5;
- padding:10px;
- margin-bottom:10px;
- border-radius:8px;
-}
+body{font-family:sans-serif;padding:10px;margin:0;}
+h2{text-align:center;}
+input{width:100%;padding:12px;margin-bottom:10px;font-size:16px;box-sizing:border-box;}
+button{width:100%;padding:15px;margin-bottom:10px;font-size:16px;border:none;border-radius:8px;}
+.add{background:#4CAF50;color:white;}
+.del{background:#f44336;color:white;width:auto;padding:5px 10px;font-size:12px;margin-left:10px;}
+.card{background:#f5f5f5;padding:10px;margin-bottom:10px;border-radius:8px;}
 </style>
 </head>
 
@@ -64,8 +19,9 @@ button{
 
 <input id="a" placeholder="エリア">
 <input id="t" type="number" placeholder="時間（分）">
-<input id="z" placeholder="時間帯（例：昼・夜）">
+<input id="z" placeholder="時間帯">
 <input id="p" type="number" placeholder="単価（円）">
+<input id="w" type="number" placeholder="注文待ち時間（分）">
 
 <button class="add" onclick="add()">追加</button>
 
@@ -75,104 +31,113 @@ button{
 let d = JSON.parse(localStorage.getItem("d")||"[]");
 
 function save(){
- localStorage.setItem("d", JSON.stringify(d));
+localStorage.setItem("d", JSON.stringify(d));
 }
 
 function add(){
- let a=document.getElementById("a").value.trim();
- let t=Number(document.getElementById("t").value);
- let z=document.getElementById("z").value.trim();
- let p=Number(document.getElementById("p").value);
+let a=document.getElementById("a").value.trim();
+let t=Number(document.getElementById("t").value);
+let z=document.getElementById("z").value.trim();
+let p=Number(document.getElementById("p").value);
+let w=Number(document.getElementById("w").value);
 
- if(!a || !z || isNaN(t) || isNaN(p)) {
-  alert("入力ミスあります");
-  return;
- }
+if(!a || !z || isNaN(t) || isNaN(p) || isNaN(w)) {
+ alert("入力ミスあります");
+ return;
+}
 
- d.push({a,t,z,p});
- save();
- render();
+d.push({a,t,z,p,w});
+save();
+render();
 
- // 入力リセット（スマホ用）
- document.getElementById("a").value="";
- document.getElementById("t").value="";
- document.getElementById("z").value="";
- document.getElementById("p").value="";
+document.getElementById("a").value="";
+document.getElementById("t").value="";
+document.getElementById("z").value="";
+document.getElementById("p").value="";
+document.getElementById("w").value="";
 }
 
 function del(i){
- d.splice(i,1);
- save();
- render();
+d.splice(i,1);
+save();
+render();
 }
 
 function render(){
- let group = {};
+let group = {};
 
- d.forEach((x,i)=>{
-  if(!x.p || !x.t) return;
+d.forEach((x,i)=>{
+ if(!x.p || !x.t || !x.w) return;
 
-  let key = x.a+"（"+x.z+"）";
+ let key = x.a+"（"+x.z+"）";
 
-  if(!group[key]){
-   group[key] = [];
-  }
+ if(!group[key]) group[key] = [];
 
-  group[key].push({
-   t: x.t,
-   p: x.p,
-   index: i
-  });
+ group[key].push({
+  t:x.t,
+  p:x.p,
+  w:x.w,
+  index:i
+ });
+});
+
+let arr = [];
+
+for(let k in group){
+ let list = group[k];
+
+ let totalT=0,totalP=0,totalW=0;
+
+ list.forEach(x=>{
+  totalT+=x.t;
+  totalP+=x.p;
+  totalW+=x.w;
  });
 
- let arr = [];
+ let avgT = totalT / list.length;
+ let avgP = totalP / list.length;
+ let avgW = totalW / list.length;
 
- for(let k in group){
-  let list = group[k];
+ let hourly = 60 / avgT * avgP;
 
-  let totalT = 0;
-  let totalP = 0;
+ // 供給不足スコア（重要）
+ let score = hourly * (avgW / 30);
 
-  list.forEach(x=>{
-   totalT += x.t;
-   totalP += x.p;
-  });
+ arr.push({
+  name:k,
+  count:list.length,
+  avgT:avgT,
+  avgW:avgW,
+  hourly:hourly,
+  score:score,
+  index:list[0].index
+ });
+}
 
-  let avgT = totalT / list.length;
-  let avgP = totalP / list.length;
-  let hourly = 60 / avgT * avgP;
+arr.sort((a,b)=>b.score - a.score);
 
-  arr.push({
-   name: k,
-   count: list.length,
-   avgT: avgT,
-   hourly: hourly,
-   index: list[0].index
-  });
+let o="";
+
+arr.forEach((x,i)=>{
+ let trust = "";
+ if(x.count <= 2){
+  trust = "（参考）";
+ }else if(x.count >= 5){
+  trust = "（信頼高）";
  }
 
- arr.sort((a,b)=>b.hourly - a.hourly);
+ o += "<div class='card'>";
+ o += "<b>"+(i+1)+"位 "+x.name+"</b><br>";
+ o += "件数:"+x.count+trust+"<br>";
+ o += "平均:"+x.avgT.toFixed(1)+"分<br>";
+ o += "待ち時間:"+x.avgW.toFixed(1)+"分<br>";
+ o += "時給:"+x.hourly.toFixed(0)+"円<br>";
+ o += "供給不足スコア:"+x.score.toFixed(0)+"<br>";
+ o += "<button class='del' onclick='del("+x.index+")'>削除</button>";
+ o += "</div>";
+});
 
- let o="";
-
- arr.forEach((x,i)=>{
-  let trust = "";
-  if(x.count <= 2){
-    trust = "（参考）";
-  }else if(x.count >= 5){
-    trust = "（信頼高）";
-  }
-
-  o += "<div class='card'>";
-  o += "<b>"+(i+1)+"位 "+x.name+"</b><br>";
-  o += "件数:"+x.count+trust+"<br>";
-  o += "平均:"+x.avgT.toFixed(1)+"分<br>";
-  o += "時給:"+x.hourly.toFixed(0)+"円<br>";
-  o += "<button class='del' onclick='del("+x.index+")'>削除</button>";
-  o += "</div>";
- });
-
- document.getElementById("o").innerHTML = o;
+document.getElementById("o").innerHTML = o;
 }
 
 render();
